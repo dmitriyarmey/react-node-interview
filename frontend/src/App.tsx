@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import type { ChangeEvent } from "react";
 import AppBar from "@mui/material/AppBar";
 import Toolbar from "@mui/material/Toolbar";
 import Typography from "@mui/material/Typography";
@@ -8,6 +9,8 @@ import Button from "@mui/material/Button";
 import Paper from "@mui/material/Paper";
 import Stack from "@mui/material/Stack";
 import Chip from "@mui/material/Chip";
+import Switch from "@mui/material/Switch";
+import FormControlLabel from "@mui/material/FormControlLabel";
 import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
@@ -27,8 +30,9 @@ import {
   timestampToDate,
   setDoc,
   updateDoc,
-} from "../db/mockFirestore.js";
-import { useMockFirestore } from "./context/MockFirestoreContext.jsx";
+} from "../db/mockFirestore";
+import { useMockFirestore } from "./context/MockFirestoreContext";
+import { useAuth } from "./context/AuthContext";
 
 const vehicleStatusOptions = [
   "New",
@@ -40,10 +44,55 @@ const vehicleStatusOptions = [
   "Paid",
 ];
 
-const toDateTimeLocalValue = (value) => {
+type User = {
+  id: string;
+  name: string;
+  role?: string;
+};
+
+type UserRecord = Omit<User, "id">;
+
+type Vehicle = {
+  id: string;
+  vin?: string;
+  make?: string;
+  model?: string;
+  status?: string;
+  book_price?: number;
+  updatedAt?: Timestamp | { seconds: number; nanoseconds?: number } | number | string;
+  ownerId?: string;
+  updatedBy?: string;
+};
+
+type VehicleRecord = Omit<Vehicle, "id">;
+
+type EditDraft = {
+  id: string;
+  vin: string;
+  make: string;
+  model: string;
+  status: string;
+  book_price: string;
+  updatedAtLocal: string;
+  ownerId: string;
+  updatedBy: string;
+  isNew: boolean;
+};
+
+type EditableField =
+  | "vin"
+  | "make"
+  | "model"
+  | "status"
+  | "book_price"
+  | "updatedAtLocal"
+  | "ownerId"
+  | "updatedBy";
+
+const toDateTimeLocalValue = (value: unknown) => {
   const date = timestampToDate(value);
   if (!date) return "";
-  const pad = (part) => String(part).padStart(2, "0");
+  const pad = (part: number) => String(part).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
     date.getDate()
   )}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
@@ -51,32 +100,42 @@ const toDateTimeLocalValue = (value) => {
 
 function App() {
   const { db } = useMockFirestore();
-  const [users, setUsers] = useState([]);
-  const [vehicles, setVehicles] = useState([]);
+  const { currentUser, setRole } = useAuth();
+  const [users, setUsers] = useState<User[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [editOpen, setEditOpen] = useState(false);
-  const [editDraft, setEditDraft] = useState(null);
+  const [editDraft, setEditDraft] = useState<EditDraft | null>(null);
   const [editError, setEditError] = useState("");
   const [editSaving, setEditSaving] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, "users"), (snapshot) => {
-      const nextUsers = snapshot.docs.map((docSnap) => ({
-        id: docSnap.id,
-        ...docSnap.data(),
-      }));
-      setUsers(nextUsers);
-    });
+    const unsubscribe = onSnapshot<UserRecord>(
+      collection(db, "users"),
+      (snapshot) => {
+        if (!("docs" in snapshot)) return;
+        const nextUsers = snapshot.docs.map((docSnap) => ({
+          id: docSnap.id,
+          name: docSnap.data()?.name ?? "Unknown",
+          role: docSnap.data()?.role,
+        }));
+        setUsers(nextUsers);
+      }
+    );
     return unsubscribe;
   }, [db]);
 
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, "vehicles"), (snapshot) => {
-      const nextVehicles = snapshot.docs.map((docSnap) => ({
-        id: docSnap.id,
-        ...docSnap.data(),
-      }));
-      setVehicles(nextVehicles);
-    });
+    const unsubscribe = onSnapshot<VehicleRecord>(
+      collection(db, "vehicles"),
+      (snapshot) => {
+        if (!("docs" in snapshot)) return;
+        const nextVehicles = snapshot.docs.map((docSnap) => ({
+          id: docSnap.id,
+          ...(docSnap.data() ?? {}),
+        }));
+        setVehicles(nextVehicles);
+      }
+    );
     return unsubscribe;
   }, [db]);
 
@@ -84,6 +143,13 @@ function App() {
     const map = new Map(users.map((user) => [user.id, user.name]));
     return map;
   }, [users]);
+
+  const handleRoleToggle = (
+    _event: ChangeEvent<HTMLInputElement>,
+    checked: boolean
+  ) => {
+    setRole(checked ? "admin" : "user");
+  };
 
   const handleAddMockVehicle = () => {
     setEditDraft({
@@ -102,7 +168,7 @@ function App() {
     setEditOpen(true);
   };
 
-  const formatBookPrice = (value) => {
+  const formatBookPrice = (value: unknown) => {
     if (typeof value !== "number") return "n/a";
     return new Intl.NumberFormat("en-US", {
       style: "currency",
@@ -111,12 +177,12 @@ function App() {
     }).format(value);
   };
 
-  const getUpdatedAtMillis = (value) => {
+  const getUpdatedAtMillis = (value: unknown) => {
     const date = timestampToDate(value);
     return date ? date.getTime() : 0;
   };
 
-  const openEditDialog = (row) => {
+  const openEditDialog = (row: Vehicle) => {
     setEditDraft({
       id: row?.id ?? "",
       vin: row?.vin ?? "",
@@ -142,10 +208,11 @@ function App() {
     setEditError("");
   };
 
-  const handleEditChange = (field) => (event) => {
-    const value = event.target.value;
-    setEditDraft((prev) => (prev ? { ...prev, [field]: value } : prev));
-  };
+  const handleEditChange =
+    (field: EditableField) => (event: { target: { value: string } }) => {
+      const value = event.target.value;
+      setEditDraft((prev) => (prev ? { ...prev, [field]: value } : prev));
+    };
 
   const handleSaveEdit = async () => {
     if (!editDraft) return;
@@ -298,6 +365,19 @@ function App() {
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
             Interview Sandbox
           </Typography>
+          <Stack direction="row" spacing={2} alignItems="center">
+            <Typography variant="subtitle1">{currentUser.name}</Typography>
+            <FormControlLabel
+              control={
+                <Switch
+                  color="default"
+                  checked={currentUser.role === "admin"}
+                  onChange={handleRoleToggle}
+                />
+              }
+              label={currentUser.role === "admin" ? "Admin" : "User"}
+            />
+          </Stack>
         </Toolbar>
       </AppBar>
 
@@ -334,7 +414,6 @@ function App() {
               columns={columns}
               getRowId={(row) => row.id}
               disableRowSelectionOnClick
-              pagination={false}
               initialState={{
                 sorting: { sortModel: [{ field: "updatedAt", sort: "desc" }] },
               }}

@@ -32,14 +32,14 @@ The frontend proxies `/api` requests to `http://localhost:3050`, so both can run
 ```
 frontend/
   src/
-    main.jsx        # React entry point
-    App.jsx         # MUI demo with backend ping
+    main.tsx        # React entry point
+    App.tsx         # MUI demo with backend ping
   vite.config.js    # Vite config + API proxy
   index.html
 
 backend/
   src/
-    server.js       # Fastify entry point (port 3050)
+    server.ts       # Fastify entry point (port 3050)
     routes/
       example.js    # GET /api/hello
 ```

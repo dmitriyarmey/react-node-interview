@@ -7,18 +7,39 @@ import {
   replaceCollection,
   Timestamp,
   updateDoc,
-} from "../../db/mockFirestore.js";
+} from "../../db/mockFirestore";
 
-const MockFirestoreContext = createContext(null);
+type MockFirestoreContextValue = {
+  db: ReturnType<typeof getMockFirestore>;
+};
 
-/**
- * @typedef {"New"|"Consigned"|"Arrived"|"Inspected"|"On Block"|"Sold"|"Paid"} VehicleStatus
- * @typedef {Object} BaseVehicle
- * @property {string} vin
- * @property {string} make
- * @property {string} model
- * @property {VehicleStatus} status
- */
+const MockFirestoreContext = createContext<MockFirestoreContextValue | null>(
+  null
+);
+
+type VehicleStatus =
+  | "New"
+  | "Consigned"
+  | "Arrived"
+  | "Inspected"
+  | "On Block"
+  | "Sold"
+  | "Paid";
+
+type BaseVehicle = {
+  vin: string;
+  make: string;
+  model: string;
+  status: VehicleStatus;
+};
+
+type Vehicle = BaseVehicle & {
+  id: string;
+  ownerId: string;
+  updatedBy: string;
+  book_price: number;
+  updatedAt: Timestamp;
+};
 
 const initialUsers = [
   { id: "u1", name: "Alex Chen", role: "Designer" },
@@ -51,8 +72,7 @@ const vehicleSeeds = [
 
 const buildVin = (index) => `VIN${String(index + 1).padStart(8, "0")}`;
 
-/** @type {Array<BaseVehicle & { id: string; ownerId: string; updatedBy: string }> } */
-const initialVehicles = Array.from({ length: 100 }, (_, index) => {
+const initialVehicles: Vehicle[] = Array.from({ length: 100 }, (_, index) => {
   const seed = vehicleSeeds[index % vehicleSeeds.length];
   const owner = initialUsers[index % initialUsers.length];
   const updater = initialUsers[(index + 1) % initialUsers.length];
@@ -66,7 +86,7 @@ const initialVehicles = Array.from({ length: 100 }, (_, index) => {
     updatedAt: Timestamp.now(),
     ownerId: owner.id,
     updatedBy: updater.id,
-  };
+  } as Vehicle;
 });
 
 export function MockFirestoreProvider({ children }) {
@@ -108,7 +128,7 @@ export function MockFirestoreProvider({ children }) {
       const nextUpdates = {
         updatedAt: Timestamp.now(),
         updatedBy: randomUser?.id ?? initialUsers[0].id,
-      };
+      } as Partial<Vehicle>;
 
       if (shouldChangePrice) {
         const basePrice =
