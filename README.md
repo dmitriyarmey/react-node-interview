@@ -5,7 +5,7 @@ A quick-start environment for Senior SWE technical interviews.
 | Layer    | Stack                | Port |
 | -------- | -------------------- | ---- |
 | Frontend | React + Vite + MUI   | 5173 |
-| Backend  | Node.js + Fastify    | 3050 |
+| Backend  | Node.js + Express    | 3050 |
 
 ## Getting Started
 
@@ -39,7 +39,7 @@ frontend/
 
 backend/
   src/
-    server.ts       # Fastify entry point (port 3050)
+    server.ts       # Express entry point (port 3050)
     routes/
-      example.js    # GET /api/hello
+      vehicle.ts    # POST/PATCH /api/vehicle
 ```
